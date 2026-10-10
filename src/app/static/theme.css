@@ -1,0 +1,28 @@
+:root, [data-theme="dark"] {
+    --bg-page: #0f0f12;
+    --bg-panel: rgba(24, 24, 32, 0.75);
+    --bg-input: rgba(255, 255, 255, 0.06);
+    --bg-hover: rgba(255, 255, 255, 0.1);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text: #e8e8ec;
+    --text-muted: #b8b8c0;
+    --text-dim: #6a6a72;
+    --accent: #6a5cff;
+    --accent-2: #a25cff;
+    --danger: #ff8080;
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] {
+    --bg-page: #ececf2;
+    --bg-panel: rgba(255, 255, 255, 0.85);
+    --bg-input: rgba(0, 0, 0, 0.04);
+    --bg-hover: rgba(0, 0, 0, 0.06);
+    --border: rgba(0, 0, 0, 0.08);
+    --border-strong: rgba(0, 0, 0, 0.16);
+    --text: #1a1a22;
+    --text-muted: #4a4a55;
+    --text-dim: #8a8a95;
+    --shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}

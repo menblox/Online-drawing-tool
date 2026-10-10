@@ -1,0 +1,41 @@
+[project]
+name = "just_fastapi"
+version = "1.0.0"
+description = "just"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.16.0"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+exclude = [".venv", "__pycache__", ".ruff.cache"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "B",
+    "UP"
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
