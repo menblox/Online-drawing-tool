@@ -15,7 +15,7 @@
         </header>
 
         <nav class="menu">
-            <a class="menu-item" href="/drawing/">
+            <button class="menu-item" data-action="solo">
                 <div class="menu-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
@@ -25,9 +25,9 @@
                     <span class="menu-title">Рисовать одному</span>
                     <span class="menu-sub">Чистый холст, все инструменты</span>
                 </div>
-            </a>
+            </button>
 
-            <a class="menu-item" href="/drawing/?mode=coop">
+            <button class="menu-item" data-action="coop">
                 <div class="menu-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
@@ -40,9 +40,9 @@
                     <span class="menu-title">Рисовать с другом</span>
                     <span class="menu-sub">Создать комнату и позвать</span>
                 </div>
-            </a>
+            </button>
 
-            <a class="menu-item" href="/drawing/?mode=join">
+            <button class="menu-item" data-action="join">
                 <div class="menu-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
@@ -54,7 +54,7 @@
                     <span class="menu-title">Подключиться к другу</span>
                     <span class="menu-sub">Ввести код комнаты</span>
                 </div>
-            </a>
+            </button>
         </nav>
 
         <footer class="home-footer">
@@ -62,12 +62,20 @@
         </footer>
     </main>
 
-    <script>
-        // Тема из localStorage — чтобы не было "мигания" при переходе с рисовалки
-        (function () {
-            const t = localStorage.getItem("theme");
-            if (t === "light" || t === "dark") document.body.dataset.theme = t;
-        })();
-    </script>
+    <!-- Модалка ввода кода -->
+    <div class="modal-backdrop" id="modal-backdrop">
+        <div class="modal">
+            <h2 class="modal-title">Подключение к комнате</h2>
+            <p class="modal-sub">Введите код, который прислал друг</p>
+            <input type="text" class="modal-input" id="room-input" placeholder="например: a8k3m2x9" maxlength="20" autocomplete="off" spellcheck="false">
+            <div class="modal-error" id="modal-error"></div>
+            <div class="modal-actions">
+                <button class="modal-btn modal-btn-cancel" id="modal-cancel">Отмена</button>
+                <button class="modal-btn modal-btn-primary" id="modal-submit">Подключиться</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/static/home.js"></script>
 </body>
 </html>

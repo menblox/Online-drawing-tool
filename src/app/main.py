@@ -6,6 +6,7 @@ from fastapi.responses import FileResponse
 
 from app.routers.home import router as home_router
 from app.routers.draw import router as drawing_router
+from app.routers.connect import router as connect_router
 
 app = FastAPI(title="DrawApp")
 
@@ -16,3 +17,4 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.include_router(home_router)
 app.include_router(drawing_router)
+app.include_router(connect_router)

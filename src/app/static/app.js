@@ -2,6 +2,11 @@
 const WORLD_W = 5000;
 const WORLD_H = 3500;
 const MAX_HISTORY = 50;
+const DEFAULT_LAYER_ID = "default_layer";
+
+// ==== Параметры комнаты ====
+const urlParams = new URLSearchParams(location.search);
+const roomId = urlParams.get("room");
 
 // ==== Элементы ====
 const bodyEl = document.body;
@@ -10,6 +15,14 @@ const canvas = document.getElementById("canvas");
 const ctx = canvas.getContext("2d");
 const cursorIndicator = document.getElementById("cursor-indicator");
 const dropOverlay = document.getElementById("drop-overlay");
+
+const roomBadge = document.getElementById("room-badge");
+const roomIdText = document.getElementById("room-id-text");
+const roomCopyBtn = document.getElementById("room-copy");
+
+const copyModal = document.getElementById("copy-modal");
+const copyUrlInput = document.getElementById("copy-url-input");
+const copyModalClose = document.getElementById("copy-modal-close");
 
 const statusTool = document.getElementById("status-tool");
 const statusSize = document.getElementById("status-size");
@@ -78,7 +91,7 @@ function toggleTheme() {
     showToast(next === "dark" ? "Тёмная тема" : "Светлая тема");
 }
 
-// ==== Сворачивание ====
+// ==== Сворачивание панели ====
 function loadSidebarState() {
     if (localStorage.getItem("sidebarCollapsed") === "1") {
         bodyEl.classList.add("sidebar-collapsed");
@@ -101,16 +114,17 @@ let activeLayerId = null;
 
 function genLayerId() {
     __layerIdCounter++;
-    return "layer_" + __layerIdCounter + "_" + Date.now();
+    const rand = Math.random().toString(36).substring(2, 10);
+    return "layer_" + __layerIdCounter + "_" + Date.now() + "_" + rand;
 }
 
-function createLayer(name) {
+function createLayer(name, id) {
     const c = document.createElement("canvas");
     c.width = WORLD_W;
     c.height = WORLD_H;
     const cctx = c.getContext("2d");
     return {
-        id: genLayerId(),
+        id: id || genLayerId(),
         name: name || `Слой ${layers.length + 1}`,
         canvas: c,
         ctx: cctx,
@@ -123,13 +137,17 @@ function getActiveLayer() {
     return layers.find((l) => l.id === activeLayerId) || null;
 }
 
+function getLayerById(id) {
+    return layers.find((l) => l.id === id) || null;
+}
+
 function initFirstLayer() {
-    const layer = createLayer("Слой 1");
+    const layer = createLayer("Слой 1", DEFAULT_LAYER_ID);
     layers.push(layer);
     activeLayerId = layer.id;
 }
 
-// ==== История ====
+// ==== История (undo/redo) ====
 const history = [];
 let historyIndex = -1;
 let actionBBox = null;
@@ -157,6 +175,260 @@ let prevMidY = 0;
 let lastScreenX = 0;
 let lastScreenY = 0;
 let fastMode = false;
+
+// ==== WebSocket ====
+let ws = null;
+let currentStroke = null;
+
+function connectWebSocket() {
+    if (!roomId) {
+        updateRoomBadge(false);
+        return;
+    }
+    updateRoomBadge(false);
+
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    const url = `${proto}//${location.host}/ws/${roomId}`;
+
+    try {
+        ws = new WebSocket(url);
+    } catch (e) {
+        console.error("WS error", e);
+        return;
+    }
+
+    ws.onopen = () => {
+        console.log("WS connected:", url);
+        updateRoomBadge(true);
+        showToast(`Подключено к комнате: ${roomId}`, "success");
+    };
+
+    ws.onclose = () => {
+        console.log("WS closed");
+        updateRoomBadge(false);
+    };
+
+    ws.onerror = (e) => {
+        console.error("WS error", e);
+    };
+
+    ws.onmessage = (e) => {
+        try {
+            const msg = JSON.parse(e.data);
+            handleRemoteMessage(msg);
+        } catch (err) {
+            console.error("Bad message", err);
+        }
+    };
+}
+
+function wsSend(obj) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify(obj));
+}
+
+function updateRoomBadge(connected) {
+    if (!roomId) {
+        roomBadge.style.display = "none";
+        return;
+    }
+    roomBadge.style.display = "flex";
+    roomBadge.classList.toggle("connected", connected);
+    roomIdText.textContent = roomId;
+}
+
+function handleRemoteMessage(msg) {
+    if (!msg || typeof msg !== "object") return;
+    switch (msg.type) {
+        case "stroke":
+            applyRemoteStroke(msg);
+            break;
+        case "fill":
+            applyRemoteFill(msg);
+            break;
+        case "layer_add":
+            applyRemoteLayerAdd(msg);
+            break;
+        case "layer_delete":
+            applyRemoteLayerDelete(msg);
+            break;
+        case "layer_move":
+            applyRemoteLayerMove(msg);
+            break;
+        case "layer_clear":
+            applyRemoteLayerClear(msg);
+            break;
+    }
+}
+
+// Применение чужого штриха
+function applyRemoteStroke(msg) {
+    const layerId = msg.layerId || DEFAULT_LAYER_ID;
+    let layer = getLayerById(layerId);
+
+    if (!layer) {
+        layer = createLayer("Внешний слой", layerId);
+        layers.push(layer);
+        clearHistory();
+        renderLayersList();
+    }
+
+    const c = layer.ctx;
+    const points = msg.points || [];
+    if (points.length === 0) return;
+
+    c.save();
+    c.globalCompositeOperation = "source-over";
+    c.globalAlpha = 1;
+    c.shadowBlur = 0;
+    c.shadowColor = "transparent";
+
+    let lineWidth, strokeStyle;
+    if (msg.tool === "eraser") {
+        c.globalCompositeOperation = "destination-out";
+        lineWidth = (msg.size || 4) * 1.5;
+        strokeStyle = "rgba(0,0,0,1)";
+    } else if (msg.tool === "pencil") {
+        lineWidth = Math.max(1, (msg.size || 4) * 0.35);
+        strokeStyle = msg.color || "#000";
+    } else {
+        lineWidth = Math.max(1, (msg.size || 4) * 0.7);
+        strokeStyle = msg.color || "#000";
+    }
+
+    c.lineWidth = lineWidth;
+    c.strokeStyle = strokeStyle;
+    c.lineCap = "round";
+    c.lineJoin = "round";
+
+    if (points.length === 1) {
+        c.beginPath();
+        c.arc(points[0][0], points[0][1], lineWidth / 2, 0, Math.PI * 2);
+        c.fillStyle = strokeStyle;
+        c.fill();
+    } else {
+        c.beginPath();
+        c.moveTo(points[0][0], points[0][1]);
+        for (let i = 1; i < points.length; i++) {
+            c.lineTo(points[i][0], points[i][1]);
+        }
+        c.stroke();
+    }
+
+    c.restore();
+
+    render();
+    refreshAllLayerThumbs();
+}
+
+// Применение чужой заливки
+function applyRemoteFill(msg) {
+    const layerId = msg.layerId || DEFAULT_LAYER_ID;
+    let layer = getLayerById(layerId);
+
+    if (!layer) {
+        layer = createLayer("Внешний слой", layerId);
+        layers.push(layer);
+        clearHistory();
+        renderLayersList();
+    }
+
+    // Локально выполним ту же заливку. Без записи в undo-историю.
+    actionBBox = null;
+    actionLayerId = null;
+
+    floodFillOnLayer(layer, msg.x, msg.y, msg.color || "#000");
+    render();
+    refreshAllLayerThumbs();
+}
+
+function applyRemoteLayerAdd(msg) {
+    if (getLayerById(msg.id)) return;
+    const layer = createLayer(msg.name || "Слой", msg.id);
+    layers.push(layer);
+    clearHistory();
+    renderLayersList();
+    render();
+}
+
+function applyRemoteLayerDelete(msg) {
+    const idx = layers.findIndex((l) => l.id === msg.id);
+    if (idx < 0) return;
+    if (layers.length <= 1) return;
+    layers.splice(idx, 1);
+    if (activeLayerId === msg.id) {
+        activeLayerId = layers[Math.min(idx, layers.length - 1)].id;
+    }
+    clearHistory();
+    renderLayersList();
+    render();
+}
+
+function applyRemoteLayerMove(msg) {
+    const idx = layers.findIndex((l) => l.id === msg.id);
+    if (idx < 0) return;
+    const newIdx = idx + msg.dir;
+    if (newIdx < 0 || newIdx >= layers.length) return;
+    [layers[idx], layers[newIdx]] = [layers[newIdx], layers[idx]];
+    clearHistory();
+    renderLayersList();
+    render();
+}
+
+function applyRemoteLayerClear(msg) {
+    const layer = getLayerById(msg.layerId);
+    if (!layer) return;
+    layer.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    layer.ctx.globalCompositeOperation = "source-over";
+    layer.ctx.globalAlpha = 1;
+    layer.ctx.shadowBlur = 0;
+    layer.ctx.shadowColor = "transparent";
+    layer.ctx.clearRect(0, 0, WORLD_W, WORLD_H);
+    render();
+    refreshAllLayerThumbs();
+}
+
+// ==== Копирование кода комнаты ====
+function copyRoomLink() {
+    if (!roomId) return;
+
+    const tryClipboard = async () => {
+        if (!navigator.clipboard || !window.isSecureContext) return false;
+        try {
+            await navigator.clipboard.writeText(roomId);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    tryClipboard().then((ok) => {
+        if (ok) {
+            showToast("Код скопирован: " + roomId, "success");
+        } else {
+            copyUrlInput.value = roomId;
+            copyModal.classList.add("show");
+            setTimeout(() => {
+                copyUrlInput.focus();
+                copyUrlInput.select();
+            }, 100);
+        }
+    });
+}
+
+copyModalClose.addEventListener("click", () => {
+    copyModal.classList.remove("show");
+});
+
+copyModal.addEventListener("click", (e) => {
+    if (e.target === copyModal) copyModal.classList.remove("show");
+});
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && copyModal.classList.contains("show")) {
+        copyModal.classList.remove("show");
+    }
+});
 
 // ==== Цвета ====
 const DEFAULT_COLORS = [
@@ -277,17 +549,20 @@ function renderLayersList() {
     }
 }
 
-function refreshActiveLayerThumb() {
+function refreshAllLayerThumbs() {
     const items = layersListEl.querySelectorAll(".layer-item");
     items.forEach((item) => {
         const id = item.dataset.id;
-        const layer = layers.find((l) => l.id === id);
+        const layer = getLayerById(id);
         if (!layer) return;
         const thumb = item.querySelector(".layer-thumb");
         if (thumb) updateLayerThumb(layer, thumb);
     });
 }
 
+const refreshActiveLayerThumb = refreshAllLayerThumbs;
+
+// ==== Локальные действия со слоями (с отправкой в WS) ====
 function addLayer() {
     const layer = createLayer();
     layers.push(layer);
@@ -295,6 +570,7 @@ function addLayer() {
     clearHistory();
     renderLayersList();
     render();
+    wsSend({ type: "layer_add", id: layer.id, name: layer.name });
     showToast("Слой добавлен");
 }
 
@@ -312,6 +588,7 @@ function deleteLayer(id) {
     clearHistory();
     renderLayersList();
     render();
+    wsSend({ type: "layer_delete", id });
     showToast("Слой удалён");
 }
 
@@ -324,6 +601,7 @@ function moveLayer(id, dir) {
     clearHistory();
     renderLayersList();
     render();
+    wsSend({ type: "layer_move", id, dir });
 }
 
 function duplicateLayer(id) {
@@ -338,17 +616,17 @@ function duplicateLayer(id) {
     clearHistory();
     renderLayersList();
     render();
+    wsSend({ type: "layer_add", id: copy.id, name: copy.name });
     showToast("Слой дублирован");
 }
 
-// ==== Импорт картинки как слоя ====
+// ==== Импорт картинки ====
 function importImageAsLayer(img) {
     const layer = createLayer("Картинка");
 
     let w = img.naturalWidth || img.width;
     let h = img.naturalHeight || img.height;
 
-    // Вписываем в мир, если картинка больше
     const maxW = WORLD_W * 0.9;
     const maxH = WORLD_H * 0.9;
     if (w > maxW || h > maxH) {
@@ -366,6 +644,7 @@ function importImageAsLayer(img) {
     clearHistory();
     renderLayersList();
     render();
+    wsSend({ type: "layer_add", id: layer.id, name: layer.name });
     showToast("Картинка добавлена как слой", "success");
 }
 
@@ -420,7 +699,6 @@ canvasArea.addEventListener("drop", (e) => {
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
 
-    // Обрабатываем только первое изображение
     for (let i = 0; i < files.length; i++) {
         if (files[i].type.startsWith("image/")) {
             handleImageFile(files[i]);
@@ -430,7 +708,6 @@ canvasArea.addEventListener("drop", (e) => {
     showToast("Поддерживаются только изображения", "error");
 });
 
-// Предотвращаем открытие картинки браузером вне canvas-area
 window.addEventListener("dragover", (e) => e.preventDefault());
 window.addEventListener("drop", (e) => {
     if (!canvasArea.contains(e.target)) {
@@ -610,7 +887,7 @@ function commitAction() {
     if (!actionBBox || !actionLayerId) return;
     if (!isFinite(actionBBox.minX)) { actionBBox = null; actionLayerId = null; return; }
 
-    const layer = layers.find((l) => l.id === actionLayerId);
+    const layer = getLayerById(actionLayerId);
     if (!layer) { actionBBox = null; actionLayerId = null; return; }
 
     const pad = 12;
@@ -635,7 +912,7 @@ function commitAction() {
     actionBBox = null;
     actionLayerId = null;
     updateHistoryButtons();
-    refreshActiveLayerThumb();
+    refreshAllLayerThumbs();
 }
 
 function updateHistoryButtons() {
@@ -658,12 +935,12 @@ function restoreSnapshot(snap, x, y, layerCtx) {
 function undo() {
     if (historyIndex < 0) return;
     const e = history[historyIndex];
-    const layer = layers.find((l) => l.id === e.layerId);
+    const layer = getLayerById(e.layerId);
     if (!layer) { historyIndex--; updateHistoryButtons(); return; }
     restoreSnapshot(e.before, e.x, e.y, layer.ctx);
     historyIndex--;
     render();
-    refreshActiveLayerThumb();
+    refreshAllLayerThumbs();
     updateHistoryButtons();
     showToast("Отменено");
 }
@@ -672,11 +949,11 @@ function redo() {
     if (historyIndex >= history.length - 1) return;
     historyIndex++;
     const e = history[historyIndex];
-    const layer = layers.find((l) => l.id === e.layerId);
+    const layer = getLayerById(e.layerId);
     if (!layer) { historyIndex++; updateHistoryButtons(); return; }
     restoreSnapshot(e.after, e.x, e.y, layer.ctx);
     render();
-    refreshActiveLayerThumb();
+    refreshAllLayerThumbs();
     updateHistoryButtons();
     showToast("Повторено");
 }
@@ -709,14 +986,12 @@ function effectiveColor(data, i) {
     ];
 }
 
-// ==== Заливка ====
-function floodFill(startX, startY) {
+// ==== Заливка (параметризованная) ====
+// Работает с указанным слоем и цветом, независимо от глобального состояния
+function floodFillOnLayer(layer, startX, startY, fillColor) {
     startX = Math.floor(startX);
     startY = Math.floor(startY);
     if (startX < 0 || startY < 0 || startX >= WORLD_W || startY >= WORLD_H) return;
-
-    const layer = getActiveLayer();
-    if (!layer) return;
 
     const imageData = layer.ctx.getImageData(0, 0, WORLD_W, WORLD_H);
     const data = imageData.data;
@@ -724,7 +999,7 @@ function floodFill(startX, startY) {
     const startIdx = (startY * WORLD_W + startX) * 4;
     const [tR, tG, tB, tA] = effectiveColor(data, startIdx);
 
-    const fc = hexToRgb(color);
+    const fc = hexToRgb(fillColor);
     const fR = fc.r, fG = fc.g, fB = fc.b, fA = 255;
 
     if (tR === fR && tG === fG && tB === fB) return;
@@ -782,6 +1057,13 @@ function floodFill(startX, startY) {
     }
 
     layer.ctx.putImageData(imageData, 0, 0);
+}
+
+// Обёртка для локального использования (активный слой + текущий цвет)
+function floodFill(startX, startY) {
+    const layer = getActiveLayer();
+    if (!layer) return;
+    floodFillOnLayer(layer, startX, startY, color);
 }
 
 // ==== Пипетка ====
@@ -896,6 +1178,9 @@ canvas.addEventListener("mousedown", (e) => {
     }
 
     if (tool === "fill") {
+        const layer = getActiveLayer();
+        if (!layer) return;
+
         beginAction();
         showSpinner();
         setTimeout(() => {
@@ -903,6 +1188,16 @@ canvas.addEventListener("mousedown", (e) => {
             commitAction();
             hideSpinner();
             render();
+
+            // отправляем заливку другу
+            wsSend({
+                type: "fill",
+                layerId: layer.id,
+                x: world.x,
+                y: world.y,
+                color: color,
+            });
+
             showToast("Заливка выполнена");
         }, 30);
         return;
@@ -922,6 +1217,18 @@ canvas.addEventListener("mousedown", (e) => {
         lastWorldY = world.y;
         prevMidX = world.x;
         prevMidY = world.y;
+
+        if (roomId) {
+            currentStroke = {
+                layerId: layer.id,
+                color: color,
+                size: size,
+                tool: tool,
+                points: [[world.x, world.y]],
+            };
+        } else {
+            currentStroke = null;
+        }
 
         fastMode = isActiveLayerTopmost() && tool !== "eraser";
 
@@ -966,6 +1273,10 @@ canvas.addEventListener("mousemove", (e) => {
 
         if (!fastMode) render();
 
+        if (currentStroke) {
+            currentStroke.points.push([world.x, world.y]);
+        }
+
         prevMidX = midX;
         prevMidY = midY;
         lastWorldX = world.x;
@@ -994,6 +1305,11 @@ window.addEventListener("mouseup", () => {
                 ctx.lineTo(lastWorldX, lastWorldY);
                 ctx.stroke();
             }
+        }
+
+        if (currentStroke) {
+            wsSend({ type: "stroke", ...currentStroke });
+            currentStroke = null;
         }
 
         commitAction();
@@ -1235,13 +1551,18 @@ clearBtn.addEventListener("click", () => {
 
     commitAction();
     render();
-    refreshActiveLayerThumb();
+    refreshAllLayerThumbs();
+
+    wsSend({ type: "layer_clear", layerId: layer.id });
     showToast("Слой очищен");
 });
 
 // ==== Тема / панель ====
 themeToggle.addEventListener("click", toggleTheme);
 sidebarToggle.addEventListener("click", toggleSidebar);
+
+// ==== Плашка комнаты ====
+roomCopyBtn.addEventListener("click", copyRoomLink);
 
 // ==== Спиннер ====
 function showSpinner() { spinnerOverlay.classList.add("active"); }
@@ -1421,3 +1742,5 @@ updateCursorStyle();
 updateCursorIndicator();
 updateHistoryButtons();
 updateStatusBar();
+
+connectWebSocket();

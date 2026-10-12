@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DrawApp</title>
+    <link rel="stylesheet" href="/static/theme.css">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body data-theme="dark">
@@ -11,6 +12,18 @@
         <main class="canvas-area" id="canvas-area">
             <canvas id="canvas"></canvas>
             <div class="cursor-indicator" id="cursor-indicator"></div>
+
+            <div class="room-badge" id="room-badge" style="display: none;">
+                <span class="room-dot"></span>
+                <span>Комната:</span>
+                <span class="room-id" id="room-id-text"></span>
+                <button class="room-copy" id="room-copy" title="Скопировать ссылку">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                </button>
+            </div>
 
             <div class="drop-overlay" id="drop-overlay">
                 <div class="drop-hint">Отпустите, чтобы добавить как слой</div>
@@ -57,15 +70,23 @@
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <span class="app-title">DrawApp</span>
-                <button class="icon-btn" id="theme-toggle" title="Сменить тему">
-                    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-                    </svg>
-                    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="4"/>
-                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
-                    </svg>
-                </button>
+                <div class="header-actions">
+                    <a class="icon-btn" href="/" title="На главную">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                            <polyline points="9 22 9 12 15 12 15 22"/>
+                        </svg>
+                    </a>
+                    <button class="icon-btn" id="theme-toggle" title="Сменить тему">
+                        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+                        </svg>
+                        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="4"/>
+                            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div class="divider"></div>
@@ -211,6 +232,17 @@
 
     <div class="toast-container" id="toast-container"></div>
 
-    <script src="/static/app.js"></script>
+    <div class="copy-modal-backdrop" id="copy-modal">
+        <div class="copy-modal">
+            <h3 class="copy-modal-title">Ссылка на комнату</h3>
+            <p class="copy-modal-sub">Скопируйте вручную (Ctrl+C):</p>
+            <input type="text" class="copy-modal-input" id="copy-url-input" readonly>
+            <div class="copy-modal-actions">
+                <button class="copy-modal-btn" id="copy-modal-close">Закрыть</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/static/app.js"></script>
 </body>
 </html>

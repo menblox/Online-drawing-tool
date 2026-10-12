@@ -100,6 +100,74 @@ body {
     border: 2px solid rgba(0, 0, 0, 0.35);
 }
 
+/* ==== Плашка комнаты ==== */
+.room-badge {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    font-size: 0.78rem;
+    color: #fff;
+    z-index: 6;
+    font-variant-numeric: tabular-nums;
+}
+
+.room-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff5050;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.room-badge.connected .room-dot {
+    background: #34c759;
+    box-shadow: 0 0 8px rgba(52, 199, 89, 0.7);
+}
+
+.room-id {
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.4px;
+}
+
+.room-copy {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 4px;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.room-copy:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.room-copy:active {
+    transform: scale(0.9);
+}
+
+.room-copy svg {
+    width: 12px;
+    height: 12px;
+}
+
 /* ==== Drag&drop overlay ==== */
 .drop-overlay {
     position: absolute;
@@ -365,6 +433,7 @@ body.sidebar-collapsed .sidebar {
     align-items: center;
     justify-content: space-between;
     padding: 0 4px;
+    gap: 8px;
 }
 
 .app-title {
@@ -375,6 +444,15 @@ body.sidebar-collapsed .sidebar {
     background-clip: text;
     color: transparent;
     letter-spacing: 0.3px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 6px;
+}
+
+a.icon-btn {
+    text-decoration: none;
 }
 
 .divider {
@@ -928,6 +1006,98 @@ input[type="range"]::-moz-range-thumb {
     height: 1px;
     background: var(--border);
     margin: 4px 0;
+}
+
+/* ==== Модалка копирования ==== */
+.copy-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    padding: 20px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.copy-modal-backdrop.show {
+    display: flex;
+    opacity: 1;
+}
+
+.copy-modal {
+    width: 100%;
+    max-width: 440px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--border-strong);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.copy-modal-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 6px;
+}
+
+.copy-modal-sub {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 14px;
+}
+
+.copy-modal-input {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    outline: none;
+    margin-bottom: 14px;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.copy-modal-input:focus {
+    border-color: var(--accent);
+}
+
+.copy-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.copy-modal-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.15s ease;
+    box-shadow: 0 4px 14px rgba(106, 92, 255, 0.4);
+}
+
+.copy-modal-btn:hover {
+    box-shadow: 0 6px 20px rgba(106, 92, 255, 0.55);
+}
+
+.copy-modal-btn:active {
+    transform: scale(0.97);
 }
 
 /* ==== Скроллбары ==== */
